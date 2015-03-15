@@ -1,25 +1,162 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
+author: "Rodolfo Garzon"
+date: "March 8, 2015"
 output: 
   html_document:
     keep_md: true
 ---
 
+```{r, echo=FALSE}
+options(scipen=999)
+```
+
+## Assignment introduction
+Analyze the data from a personal activity monitor, this device collect data every 5 minutes through out the day, the data consists of two months of data from an anonymous source from October and November, 2013 and include the number of steps taken in 5 minutes intervals each day.
+
 
 ## Loading and preprocessing the data
-
-
+The first step is load the data located in the file "activity.csv" from working directory `r getwd()`
+```{r loadingdata}
+activity <- read.csv("activity.csv")
+```
+a quick summary of the data
+```{r, echo=FALSE}
+str(activity)
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r histogram1}
+require(ggplot2)
+activity.byDay <- aggregate(activity$steps, by=list(activity$date), FUN="sum")
+names(activity.byDay) <- c("date", "totalsteps")
+ggplot(activity.byDay, aes(x = totalsteps)) + geom_histogram(aes(fill = ..count..))
+
+```
+
+The mean of the total number of steps taken by day is `r mean(na.omit(activity.byDay$totalsteps))`; 
+the median is `r median(na.omit(activity.byDay$totalsteps))`
 
 
 ## What is the average daily activity pattern?
+we get the averange number of steps taken every 5 minutes across all days (10-01-2012 to 11-30-2012); we need to remove any "na" value from our dataset in order to be able to calculate properly the averange.
+
+```{r}
+averange.byday <- aggregate(activity$steps, by=list(activity$interval), FUN="mean", na.rm="TRUE")
+names(averange.byday) <- c("interval", "averange")
+head(averange.byday)
+
+series <- ggplot(averange.byday, aes(x = interval, y = averange)) + geom_line() + xlab("5 min interval during the day") + ylab("averange number of steps")
+series
+
+```
+
+Getting the maximum number of steps
+```{r, eval=FALSE}
+max(averange.byday$averange)
+```
+
+and getting the interval that contains the maximum value
+```{r, eval=FALSE}
+averange.byday[averange.byday$averange == max(averange.byday$averange),1]
+```
+
+The interval `r averange.byday[averange.byday$averange == max(averange.byday$averange),1]` contains the maximum number of steps `r max(averange.byday$averange)`
 
 
 
 ## Imputing missing values
 
+```{r, eval=FALSE}
+length(which(is.na(activity$steps)))
+```
+
+The total number of rows with missing values is `r length(which(is.na(activity$steps))) `
+
+We have decide that we will fill the NA values with the averange of the interval across all the days; in order to do that first we need to merge the activity data fram with the averange interval data frame, as the both data frames have different lenght, we will use cbind so the averange data frame will be repeat across all the interval on all days
+
+```{r}
+activity.plus <- cbind(activity, averange.byday)
+```
+
+```{r, echo=FALSE}
+head(activity.plus, 10)
+```
+```{r, echo=FALSE}
+tail(activity.plus, 10)
+```
+we can identify the rows with NA with the following code
+```{r, eval=FALSE}
+which(is.na(activity$steps))
+```
+
+now, we replace the NA values with the correspondand averange value for the interval as follow
+
+```{r}
+activity.plus$steps[is.na(activity.plus$steps)] <- activity.plus$averange[is.na(activity.plus$steps)]
+```
+
+the result is a subset as follow
+```{r}
+activity.plus <- subset( activity.plus, select = c("steps", "date", "interval"))
+```
+```{r, echo=FALSE}
+head(activity.plus, 10)
+```
+```{r, echo=FALSE}
+tail(activity.plus, 10)
+```
+
+```{r histogram2}
+
+activity.plus.byDay <- aggregate(activity.plus$steps, by=list(activity.plus$date), FUN="sum")
+names(activity.plus.byDay) <- c("date", "totalsteps")
+ggplot(activity.plus.byDay, aes(x = totalsteps)) + geom_histogram(aes(fill = ..count..))
+
+```
+
+Comparing the data frames with and without NA we got:  
+  
+Total number of steps on the data frame with NA is `r sum(activity$steps, na.rm="TRUE")`  
+Total number of steps on the data frame without NA is `r sum(activity.plus$steps, na.rm="TRUE")`  
+
+
+```{r}
+activity.plus.byDay <- aggregate(activity.plus$steps, by=list(activity.plus$date), FUN="sum")
+names(activity.plus.byDay) <- c("date", "totalsteps")
+```
+
+The mean of the total number of steps taken by day is `r mean(na.omit(activity.plus.byDay$totalsteps)) `; 
+the median is `r median(na.omit(activity.plus.byDay$totalsteps))`
+
+Comparing the result agains the mean and media using the data frame with NA, the mean is the same for both, median is different.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+In order to differenciate the data by day, we need to extract the day from the Date variable
+
+```{r}
+activity.days <- activity.plus
+activity.days$wday <-  weekdays(as.Date(activity.plus$date))
+weekdays <- c("Monday", "Tuesday", "Wednesday", "Thrusday", "Friday")
+activity.days$daygroup <- ifelse(activity.days$wday %in% weekdays, "weekday", "weekend")
+activity.days <- subset(activity.days, select = c("steps", "date", "interval", "daygroup"))
+str(activity.days)
+```
+
+Comparing weekdays and weekends activity
+
+```{r}
+averange.weekday <- aggregate(activity.days$steps, by=list(activity.days$interval, activity.days$daygroup), FUN="mean", na.rm="TRUE")
+
+names(averange.weekday) <- c("interval", "group", "averange") 
+head(averange.weekday)
+
+ggplot(averange.weekday, aes(x = interval, y = averange)) + geom_line(color = "blue") + facet_wrap(~group, ncol = 1) + ylab("averange number of steps")+ xlab("5 min interval during the day") 
+
+
+```
+
+
